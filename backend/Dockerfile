@@ -44,4 +44,4 @@ EXPOSE 4000
 ENTRYPOINT ["dumb-init", "--"]
 
 # Start the application
-CMD ["node", "dist/index-fixed.js"]
+CMD ["node", "dist/index.js"]

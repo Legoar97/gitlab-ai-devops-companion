@@ -2,26 +2,81 @@ import { GraphQLClient } from 'graphql-request';
 import { gql } from 'graphql-tag';
 import axios from 'axios';
 
+// --- Definición de Interfaces para la respuesta de GetProjectPipelines ---
+interface JobStage {
+  name: string;
+}
+
+interface JobNode {
+  id: string;
+  name: string;
+  status: string;
+  duration: number | null;
+  stage: JobStage;
+}
+
+interface User {
+  name: string;
+  username: string;
+}
+
+interface Commit {
+  sha: string;
+  title: string;
+  message: string;
+}
+
+interface PipelineNode {
+  id: string;
+  iid: string; // Asumiendo que iid es un string como usualmente es en IDs de GitLab
+  status: string;
+  duration: number | null;
+  createdAt: string;
+  finishedAt: string | null;
+  webUrl: string;
+  jobs?: {
+    nodes: JobNode[];
+  };
+  user?: User | null;
+  commit?: Commit | null;
+}
+
+interface ProjectPipelinesData {
+  id: string;
+  name: string;
+  description: string | null;
+  webUrl: string;
+  pipelines?: {
+    nodes: PipelineNode[];
+  };
+}
+
+interface GetProjectPipelinesGQLResponse {
+  project: ProjectPipelinesData;
+}
+// --- Fin de Definición de Interfaces ---
+
+
 export class GitLabService {
   private graphqlClient: GraphQLClient;
-  private apiClient: any;
+  private apiClient: any; // Considera tipar esto también si es posible
   private gitlabUrl: string;
   private token: string;
 
   constructor() {
-    this.token = process.env.GITLAB_TOKEN || '';
-    this.gitlabUrl = process.env.GITLAB_URL || 'https://gitlab.com';
+    this.token = process.env.GITLAB_TOKEN || ''; //
+    this.gitlabUrl = process.env.GITLAB_URL || 'https://gitlab.com'; //
     
     // Cliente GraphQL
-    this.graphqlClient = new GraphQLClient(`${this.gitlabUrl}/api/graphql`, {
+    this.graphqlClient = new GraphQLClient(`${this.gitlabUrl}/api/graphql`, { //
       headers: {
         'Authorization': `Bearer ${this.token}`,
       },
     });
 
     // Cliente REST API
-    this.apiClient = axios.create({
-      baseURL: `${this.gitlabUrl}/api/v4`,
+    this.apiClient = axios.create({ //
+      baseURL: `${this.gitlabUrl}/api/v4`, //
       headers: {
         'PRIVATE-TOKEN': this.token,
       },
@@ -41,7 +96,7 @@ export class GitLabService {
   }
 
   // Obtener pipelines reales del proyecto
-  async getProjectPipelines(projectPath: string) {
+  async getProjectPipelines(projectPath: string): Promise<ProjectPipelinesData> { //
     const query = gql`
       query GetProjectPipelines($projectPath: ID!) {
         project(fullPath: $projectPath) {
@@ -82,14 +137,15 @@ export class GitLabService {
           }
         }
       }
-    `;
+    `; //
 
     try {
-      const data = await this.graphqlClient.request(query, { projectPath });
-      return data.project;
+      // Especifica el tipo de respuesta para el método request
+      const data = await this.graphqlClient.request<GetProjectPipelinesGQLResponse>(query, { projectPath }); //
+      return data.project; // Ahora 'data' está tipado y 'data.project' es accesible de forma segura //
     } catch (error) {
-      console.error('GitLab GraphQL error:', error);
-      throw error;
+      console.error('GitLab GraphQL error:', error); //
+      throw error; //
     }
   }
 
@@ -136,14 +192,12 @@ export class GitLabService {
   }
 
   // IMPORTANTE: Trigger pipeline REAL
-  async triggerPipeline(projectPath: string, ref: string = 'main', variables?: any) {
+  async triggerPipeline(projectPath: string, ref: string = 'main', variables?: any) { //
     try {
       console.log(`🚀 Triggering REAL pipeline for ${projectPath} on ${ref}`);
       
-      // Obtener el proyecto
       const project = await this.getProject(projectPath);
       
-      // Preparar variables para el pipeline
       const pipelineVariables = [];
       if (variables) {
         for (const [key, value] of Object.entries(variables)) {
@@ -155,8 +209,7 @@ export class GitLabService {
         }
       }
 
-      // Trigger pipeline via REST API
-      const response = await this.apiClient.post(
+      const response = await this.apiClient.post( //
         `/projects/${project.id}/pipeline`,
         {
           ref: ref,
@@ -179,27 +232,26 @@ export class GitLabService {
         errors: []
       };
     } catch (error: any) {
-      console.error('Error triggering pipeline:', error.response?.data || error.message);
+      console.error('Error triggering pipeline:', error.response?.data || error.message); //
       
-      // Manejar errores específicos
-      if (error.response?.status === 400) {
+      if (error.response?.status === 400) { //
         return {
           pipeline: null,
           errors: ['Bad request: ' + (error.response.data.message || 'Invalid parameters')]
         };
-      } else if (error.response?.status === 401) {
+      } else if (error.response?.status === 401) { //
         return {
           pipeline: null,
           errors: ['Authentication failed: Invalid GitLab token']
         };
-      } else if (error.response?.status === 404) {
+      } else if (error.response?.status === 404) { //
         return {
           pipeline: null,
           errors: [`Project not found: ${projectPath}`]
         };
       }
       
-      throw error;
+      throw error; //
     }
   }
 
