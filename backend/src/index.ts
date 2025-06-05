@@ -2,33 +2,39 @@ import express from 'express';
 import { ApolloServer } from '@apollo/server';
 import { expressMiddleware } from '@apollo/server/express4';
 import cors from 'cors';
-import bodyParser from 'body-parser'; // Mantener esta importación
+import bodyParser from 'body-parser';
 import dotenv from 'dotenv';
-import { typeDefs } from './graphql/schema'; //
-import { resolvers } from './graphql/resolvers'; //
-import { GitLabService } from './services/gitlab.service'; //
-import { AIEngine } from './services/ai-engine.service'; //
+import { typeDefs } from './graphql/schema';
+import { resolvers } from './graphql/resolvers';
+import { GitLabService } from './services/gitlab.service';
+import { AIEngine } from './services/ai-engine.service';
 
 // Cargar variables de entorno
-dotenv.config(); //
+dotenv.config();
 
 async function startServer() {
   const app = express();
-  const PORT = Number(process.env.PORT) || 4000; //
+  const PORT = Number(process.env.PORT) || 4000;
 
-  // Crear el servidor Apollo
+  // IMPORTANTE: Crear instancias de servicios AQUÍ, fuera del request handler
+  const gitlabService = new GitLabService();
+  const aiEngine = new AIEngine();
+  
+  console.log('📦 Services initialized');
+
+  // Crear el servidor Apollo con context function
   const server = new ApolloServer({
-    typeDefs, //
-    resolvers, //
-    introspection: true, //
+    typeDefs,
+    resolvers,
+    introspection: true,
   });
 
   // Iniciar Apollo Server
-  await server.start(); //
+  await server.start();
 
   // Landing page ANTES de otros middlewares
-  app.get('/', (req, res) => { //
-    const serviceUrl = `${req.protocol}://${req.get('host')}`; //
+  app.get('/', (req, res) => {
+    const serviceUrl = `${req.protocol}://${req.get('host')}`;
     res.send(`
       <!DOCTYPE html>
       <html lang="en">
@@ -393,53 +399,55 @@ async function startServer() {
         </div>
       </body>
       </html>
-    `); //
+    `);
   });
 
   // Health check
-  app.get('/health', (req, res) => { //
-    res.json({ //
-      status: 'healthy', //
-      timestamp: new Date().toISOString(), //
-      service: 'gitlab-ai-devops-companion', //
-      version: '1.0.0' //
+  app.get('/health', (req, res) => {
+    res.json({
+      status: 'healthy',
+      timestamp: new Date().toISOString(),
+      service: 'gitlab-ai-devops-companion',
+      version: '1.0.0'
     });
   });
 
   // Aplicar middlewares DESPUÉS de las rutas GET
-  app.use(cors()); //
+  app.use(cors());
 
-  // ELIMINAR EL PARSER GLOBAL DE BODY (bodyParser.json()) DE AQUÍ
-  // app.use(bodyParser.json()); // ESTA LÍNEA SE ELIMINA
-
-  // GraphQL endpoint
-  // Quitar el comentario @ts-ignore si estaba presente
+  // GraphQL endpoint con context correcto
   app.use(
-    '/graphql', // Ruta para GraphQL
-    bodyParser.json(), // 1. Aplicar bodyParser.json() específicamente para esta ruta
-    expressMiddleware(server, { // 2. Luego, aplicar el middleware de Apollo Server
-      context: async ({ req }: any) => ({
-        gitlab: new GitLabService(), //
-        ai: new AIEngine(), //
-        user: req.headers.authorization || null //
-      })
+    '/graphql',
+    bodyParser.json(),
+    expressMiddleware(server, {
+      context: async ({ req }) => {
+        // Verificar que los servicios existen
+        console.log('📝 Creating context for request');
+        console.log('🔧 GitLab service methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(gitlabService)));
+        
+        return {
+          gitlab: gitlabService,  // Usar la instancia creada arriba
+          ai: aiEngine,           // Usar la instancia creada arriba
+          user: req.headers.authorization || null
+        };
+      }
     })
   );
 
   // Iniciar servidor
-  app.listen(PORT, () => { //
+  app.listen(PORT, () => {
     console.log(`
       🚀 GitLab AI DevOps Companion started successfully!
       📍 Server running at: http://localhost:${PORT}
       📊 GraphQL endpoint: http://localhost:${PORT}/graphql
       🖥️  Platform: ${process.platform}
       📅 Date: ${new Date().toLocaleDateString()}
-    `); //
+    `);
   });
 }
 
 // Iniciar
-startServer().catch(err => { //
-  console.error('❌ Failed to start server:', err); //
-  process.exit(1); //
+startServer().catch(err => {
+  console.error('❌ Failed to start server:', err);
+  process.exit(1);
 });

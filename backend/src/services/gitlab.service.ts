@@ -28,7 +28,7 @@ interface Commit {
 
 interface PipelineNode {
   id: string;
-  iid: string; // Asumiendo que iid es un string como usualmente es en IDs de GitLab
+  iid: string;
   status: string;
   duration: number | null;
   createdAt: string;
@@ -56,27 +56,26 @@ interface GetProjectPipelinesGQLResponse {
 }
 // --- Fin de Definición de Interfaces ---
 
-
 export class GitLabService {
   private graphqlClient: GraphQLClient;
-  private apiClient: any; // Considera tipar esto también si es posible
+  private apiClient: any;
   private gitlabUrl: string;
   private token: string;
 
   constructor() {
-    this.token = process.env.GITLAB_TOKEN || ''; //
-    this.gitlabUrl = process.env.GITLAB_URL || 'https://gitlab.com'; //
+    this.token = process.env.GITLAB_TOKEN || '';
+    this.gitlabUrl = process.env.GITLAB_URL || 'https://gitlab.com';
     
     // Cliente GraphQL
-    this.graphqlClient = new GraphQLClient(`${this.gitlabUrl}/api/graphql`, { //
+    this.graphqlClient = new GraphQLClient(`${this.gitlabUrl}/api/graphql`, {
       headers: {
         'Authorization': `Bearer ${this.token}`,
       },
     });
 
     // Cliente REST API
-    this.apiClient = axios.create({ //
-      baseURL: `${this.gitlabUrl}/api/v4`, //
+    this.apiClient = axios.create({
+      baseURL: `${this.gitlabUrl}/api/v4`,
       headers: {
         'PRIVATE-TOKEN': this.token,
       },
@@ -96,7 +95,7 @@ export class GitLabService {
   }
 
   // Obtener pipelines reales del proyecto
-  async getProjectPipelines(projectPath: string): Promise<ProjectPipelinesData> { //
+  async getProjectPipelines(projectPath: string): Promise<ProjectPipelinesData> {
     const query = gql`
       query GetProjectPipelines($projectPath: ID!) {
         project(fullPath: $projectPath) {
@@ -137,15 +136,14 @@ export class GitLabService {
           }
         }
       }
-    `; //
+    `;
 
     try {
-      // Especifica el tipo de respuesta para el método request
-      const data = await this.graphqlClient.request<GetProjectPipelinesGQLResponse>(query, { projectPath }); //
-      return data.project; // Ahora 'data' está tipado y 'data.project' es accesible de forma segura //
+      const data = await this.graphqlClient.request<GetProjectPipelinesGQLResponse>(query, { projectPath });
+      return data.project;
     } catch (error) {
-      console.error('GitLab GraphQL error:', error); //
-      throw error; //
+      console.error('GitLab GraphQL error:', error);
+      throw error;
     }
   }
 
@@ -191,30 +189,138 @@ export class GitLabService {
     }
   }
 
-  // IMPORTANTE: Trigger pipeline REAL
-  async triggerPipeline(projectPath: string, ref: string = 'main', variables?: any) { //
+  // Verificar estado de CI/CD del proyecto
+  async verifyProjectCICD(projectPath: string) {
+    try {
+      console.log(`🔍 Verifying CI/CD for ${projectPath}...`);
+      
+      const project = await this.getProject(projectPath);
+      
+      // En GitLab moderno, verificamos si podemos acceder a pipelines
+      let cicdEnabled = false;
+      try {
+        const pipelines = await this.apiClient.get(
+          `/projects/${project.id}/pipelines`,
+          { params: { per_page: 1 } }
+        );
+        cicdEnabled = true; // Si no da error, CI/CD está habilitado
+        console.log(`📋 Existing pipelines: ${pipelines.data.length}`);
+        if (pipelines.data.length > 0) {
+          console.log('Last pipeline:', {
+            id: pipelines.data[0].id,
+            status: pipelines.data[0].status,
+            ref: pipelines.data[0].ref,
+            created_at: pipelines.data[0].created_at
+          });
+        }
+      } catch (e: any) {
+        if (e.response?.status === 404) {
+          cicdEnabled = false;
+        }
+      }
+      
+      console.log(`
+📊 Project CI/CD Status:
+- Project ID: ${project.id}
+- Name: ${project.name}
+- Default Branch: ${project.default_branch}
+- CI/CD Enabled: ${cicdEnabled ? '✅ YES' : '❌ NO'}
+- Visibility: ${project.visibility}
+      `);
+      
+      // Verificar si existe .gitlab-ci.yml
+      try {
+        await this.apiClient.get(
+          `/projects/${project.id}/repository/files/${encodeURIComponent('.gitlab-ci.yml')}`,
+          { params: { ref: project.default_branch } }
+        );
+        console.log('✅ .gitlab-ci.yml exists');
+      } catch (e: any) {
+        console.error('❌ .gitlab-ci.yml NOT FOUND');
+      }
+      
+      return { ...project, ci_enabled: cicdEnabled };
+    } catch (error: any) {
+      console.error('Error verifying project:', error.message);
+      throw error;
+    }
+  }
+
+  // Habilitar CI/CD si está deshabilitado
+  async enableCICD(projectPath: string) {
+    try {
+      const project = await this.getProject(projectPath);
+      
+      console.log('⚡ Attempting to enable CI/CD for the project...');
+      
+      // Intentar actualizar el proyecto con CI/CD habilitado
+      const response = await this.apiClient.put(
+        `/projects/${project.id}`,
+        {
+          builds_enabled: true,
+          jobs_enabled: true,
+          shared_runners_enabled: true
+        }
+      );
+      
+      console.log('✅ CI/CD enable request sent');
+      return response.data;
+    } catch (error: any) {
+      console.error('Error enabling CI/CD:', error.response?.data || error.message);
+      // No lanzar error, continuar de todos modos
+      return null;
+    }
+  }
+
+  // IMPORTANTE: Trigger pipeline REAL - VERSIÓN FUNCIONANDO
+  async triggerPipeline(projectPath: string, ref: string = 'main', variables?: any) {
     try {
       console.log(`🚀 Triggering REAL pipeline for ${projectPath} on ${ref}`);
       
       const project = await this.getProject(projectPath);
+      console.log(`📁 Project ID: ${project.id}`);
+      console.log(`🔗 Project URL: ${project.web_url}`);
+      console.log(`🌿 Default branch: ${project.default_branch}`);
       
-      const pipelineVariables = [];
-      if (variables) {
+      // Verificar si el branch existe
+      try {
+        await this.apiClient.get(
+          `/projects/${project.id}/repository/branches/${ref}`
+        );
+        console.log(`✅ Branch '${ref}' exists`);
+      } catch (e: any) {
+        if (e.response?.status === 404) {
+          console.error(`❌ Branch '${ref}' NOT FOUND!`);
+          // Si el branch no existe, usar el default
+          ref = project.default_branch;
+          console.log(`🔄 Switching to default branch: ${ref}`);
+        }
+      }
+      
+      // Preparar el body del request
+      const requestBody: any = {
+        ref: ref
+      };
+      
+      // Agregar variables si existen
+      if (variables && Object.keys(variables).length > 0) {
+        const pipelineVariables: Array<{key: string, value: string}> = [];
         for (const [key, value] of Object.entries(variables)) {
           pipelineVariables.push({
             key: key,
-            value: String(value),
-            variable_type: 'env_var'
+            value: String(value)
           });
         }
+        requestBody.variables = pipelineVariables;
+        console.log(`📋 Variables:`, pipelineVariables);
       }
-
-      const response = await this.apiClient.post( //
+      
+      console.log(`📤 Request body:`, JSON.stringify(requestBody, null, 2));
+      
+      // USAR EL ENDPOINT CORRECTO: /pipeline (singular) no /pipelines (plural)
+      const response = await this.apiClient.post(
         `/projects/${project.id}/pipeline`,
-        {
-          ref: ref,
-          variables: pipelineVariables
-        }
+        requestBody
       );
 
       const pipeline = response.data;
@@ -232,26 +338,73 @@ export class GitLabService {
         errors: []
       };
     } catch (error: any) {
-      console.error('Error triggering pipeline:', error.response?.data || error.message); //
+      console.error('❌ Pipeline trigger error:', {
+        status: error.response?.status,
+        statusText: error.response?.statusText,
+        data: error.response?.data,
+        url: error.config?.url,
+        method: error.config?.method
+      });
       
-      if (error.response?.status === 400) { //
-        return {
-          pipeline: null,
-          errors: ['Bad request: ' + (error.response.data.message || 'Invalid parameters')]
-        };
-      } else if (error.response?.status === 401) { //
-        return {
-          pipeline: null,
-          errors: ['Authentication failed: Invalid GitLab token']
-        };
-      } else if (error.response?.status === 404) { //
-        return {
-          pipeline: null,
-          errors: [`Project not found: ${projectPath}`]
-        };
+      let errorMessage = 'Unknown error';
+      
+      if (error.response?.data) {
+        if (typeof error.response.data === 'string') {
+          errorMessage = error.response.data;
+        } else if (error.response.data.message) {
+          errorMessage = error.response.data.message;
+        } else if (error.response.data.error) {
+          errorMessage = error.response.data.error;
+        } else {
+          errorMessage = JSON.stringify(error.response.data);
+        }
       }
       
-      throw error; //
+      return {
+        pipeline: null,
+        errors: [`Failed to trigger pipeline (${error.response?.status}): ${errorMessage}`]
+      };
+    }
+  }
+
+  // Método alternativo usando trigger token
+  async triggerPipelineWithToken(projectPath: string, ref: string = 'main', variables?: any) {
+    try {
+      const project = await this.getProject(projectPath);
+      const triggerToken = process.env.GITLAB_TRIGGER_TOKEN;
+      
+      if (!triggerToken) {
+        throw new Error('GITLAB_TRIGGER_TOKEN not configured');
+      }
+      
+      // Preparar variables para trigger endpoint
+      const params: any = {
+        token: triggerToken,
+        ref: ref
+      };
+      
+      // Agregar variables como parámetros
+      if (variables) {
+        for (const [key, value] of Object.entries(variables)) {
+          params[`variables[${key}]`] = String(value);
+        }
+      }
+      
+      console.log('🔧 Using trigger token method');
+      
+      const response = await axios.post(
+        `${this.gitlabUrl}/api/v4/projects/${project.id}/trigger/pipeline`,
+        null,
+        { params }
+      );
+      
+      return {
+        pipeline: response.data,
+        errors: []
+      };
+    } catch (error: any) {
+      console.error('Trigger token method failed:', error.response?.data);
+      throw error;
     }
   }
 
