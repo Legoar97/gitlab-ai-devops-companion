@@ -59,23 +59,61 @@ export const resolvers = {
 
       switch (aiResult.intent) {
         case 'DEPLOY_REQUEST':
+        try {
+          // Usar el proyecto del contexto o el extraído
+          const projectPath = aiResult.entities.project || userContext;
+          const branch = aiResult.entities.branch || 'main';
+          const environment = aiResult.entities.environment || 'staging';
+          
+          console.log(`📦 Deploying ${branch} to ${environment} in project ${projectPath}`);
+          
+          // Verificar que tenemos un proyecto válido
+          if (!projectPath || projectPath === 'default-project') {
+            return {
+              ...response,
+              action: 'error',
+              message: 'Please specify a valid project path (e.g., "username/project-name")',
+              executed: false
+            };
+          }
+          
+          // Trigger pipeline REAL
           const deployResult = await context.gitlab.triggerPipeline(
-            aiResult.entities.project || userContext || 'default-project',
-            aiResult.entities.branch || 'main',
+            projectPath,
+            branch,
             { 
-              ENVIRONMENT: aiResult.entities.environment || 'staging',
-              AI_OPTIMIZED: 'true'
+              ENVIRONMENT: environment,
+              AI_OPTIMIZED: 'true',
+              TRIGGERED_BY: 'GitLab AI DevOps Companion'
             }
           );
+          
+          if (deployResult.errors && deployResult.errors.length > 0) {
+            return {
+              ...response,
+              action: 'pipeline_error',
+              message: `Failed to trigger pipeline: ${deployResult.errors.join(', ')}`,
+              executed: false
+            };
+          }
           
           response = {
             ...response,
             action: 'pipeline_triggered',
-            message: `Deployment initiated to ${aiResult.entities.environment || 'staging'}`,
+            message: `🚀 Deployment initiated! Pipeline ${deployResult.pipeline.iid} started for ${branch} → ${environment}`,
             data: JSON.stringify(deployResult),
             executed: true
           };
-          break;
+        } catch (error: any) {
+          console.error('Deployment error:', error);
+          response = {
+            ...response,
+            action: 'error',
+            message: `Deployment failed: ${error.message}`,
+            executed: false
+          };
+        }
+        break;
 
         case 'STATUS_CHECK':
           const status = await context.gitlab.getPipelineStatus(

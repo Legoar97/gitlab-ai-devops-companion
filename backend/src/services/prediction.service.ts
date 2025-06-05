@@ -1,89 +1,56 @@
-import { VertexAI } from '@google-cloud/vertexai';
-
 export class PredictionService {
-  private vertexAI: VertexAI;
-  private model: any;
-
   constructor() {
-    this.vertexAI = new VertexAI({
-      project: process.env.GCP_PROJECT_ID!,
-      location: process.env.GCP_LOCATION || 'us-central1',
-    });
-
-    // Usar Gemini 2.0 Flash
-    this.model = this.vertexAI.preview.getGenerativeModel({
-      model: 'gemini-2.0-flash-001',
-      generationConfig: {
-        maxOutputTokens: 8192,
-        temperature: 0.1, // Más determinístico para predicciones
-        topP: 0.1,
-        topK: 20,
-      },
-    });
+    console.log('📊 Prediction Service initialized');
   }
 
   async predictPipelineResources(pipelineData: any) {
-    const prompt = `
-    Analyze this GitLab CI/CD pipeline data and predict resource requirements:
+    // Por ahora, predicciones simuladas
+    // Más adelante integraremos con BigQuery ML
+    const baseTime = 5;
+    const timePerJob = 2;
+    const jobCount = pipelineData.jobs?.length || 3;
     
-    Pipeline: ${JSON.stringify(pipelineData, null, 2)}
-    
-    Based on the jobs, stages, and historical patterns, predict:
-    1. CPU requirements (in cores)
-    2. Memory requirements (in GB)
-    3. Estimated duration (in minutes)
-    4. Estimated cost (in USD)
-    
-    Respond in JSON format:
-    {
-      "cpu": "X cores",
-      "memory": "X GB",
-      "estimatedDuration": X,
-      "estimatedCost": X.XX,
-      "confidence": 0.XX,
-      "reasoning": "brief explanation"
-    }
-    `;
-
-    try {
-      const result = await this.model.generateContent(prompt);
-      const response = await result.response;
-      const text = response.text();
-      
-      // Parsear JSON de la respuesta
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        return JSON.parse(jsonMatch[0]);
-      }
-      
-      // Fallback si no hay JSON válido
-      return {
-        cpu: "2 cores",
-        memory: "4 GB",
-        estimatedDuration: 10,
-        estimatedCost: 0.50,
-        confidence: 0.75,
-        reasoning: "Default prediction"
-      };
-    } catch (error) {
-      console.error('Prediction error:', error);
-      throw error;
-    }
+    return {
+      cpu: jobCount > 5 ? "4 cores" : "2 cores",
+      memory: jobCount > 5 ? "8 GB" : "4 GB",
+      estimatedDuration: baseTime + (jobCount * timePerJob),
+      estimatedCost: (baseTime + (jobCount * timePerJob)) * 0.05,
+      confidence: 0.75,
+      reasoning: "Based on job complexity and historical patterns"
+    };
   }
 
   async analyzeCodeComplexity(code: string) {
-    const prompt = `
-    Analyze this code change and determine its complexity for CI/CD:
+    // Análisis básico de complejidad
+    const lines = code.split('\n').length;
+    const complexity = Math.min(10, Math.floor(lines / 50));
     
-    ${code}
-    
-    Rate the complexity from 1-10 and explain what resources it might need.
-    Consider: test complexity, build steps, dependencies, deployment risks.
-    
-    Format: JSON with complexity score and resource recommendations.
-    `;
+    return {
+      complexity,
+      lines,
+      recommendations: complexity > 7 ? 
+        ["Consider breaking down into smaller modules", "Add more unit tests"] : 
+        ["Code complexity is manageable"]
+    };
+  }
 
-    const result = await this.model.generateContent(prompt);
-    return result.response.text();
+  async predictFailureRisk(pipelineConfig: any) {
+    // Predicción de riesgo de fallo
+    let risk = 0.1; // Base 10% risk
+    
+    // Factores que aumentan el riesgo
+    if (!pipelineConfig.cache) risk += 0.1;
+    if (!pipelineConfig.retry) risk += 0.15;
+    if (pipelineConfig.parallel > 5) risk += 0.2;
+    
+    return {
+      riskScore: Math.min(risk, 0.9),
+      factors: [
+        !pipelineConfig.cache && "No caching configured",
+        !pipelineConfig.retry && "No retry policy",
+        pipelineConfig.parallel > 5 && "High parallelization"
+      ].filter(Boolean),
+      recommendation: risk > 0.5 ? "High risk - review configuration" : "Low risk"
+    };
   }
 }
