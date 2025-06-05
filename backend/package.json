@@ -1,0 +1,42 @@
+{
+  "name": "gitlab-ai-companion-backend",
+  "version": "1.0.0",
+  "scripts": {
+    "dev": "nodemon --exec ts-node src/index.ts",
+    "dev:windows": "nodemon --exec \"npx ts-node\" src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "start:prod": "set NODE_ENV=production&& node dist/index.js",
+    "lint": "eslint src/**/*.ts",
+    "clean": "if exist dist rmdir /s /q dist"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "@apollo/server": "^4.12.2",
+    "@google-cloud/aiplatform": "^4.2.0",
+    "@google-cloud/dialogflow-cx": "^5.1.0",
+    "@google-cloud/vertexai": "^1.10.0",
+    "@graphql-tools/schema": "^10.0.23",
+    "axios": "^1.9.0",
+    "cors": "^2.8.5",
+    "dotenv": "^16.5.0",
+    "express": "^5.1.0",
+    "graphql": "^16.11.0",
+    "graphql-request": "^7.2.0",
+    "graphql-tag": "^2.12.6",
+    "helmet": "^8.1.0"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.18",
+    "@types/express": "^5.0.2",
+    "@types/node": "^20.17.57",
+    "@typescript-eslint/eslint-plugin": "^8.33.1",
+    "@typescript-eslint/parser": "^8.33.1",
+    "nodemon": "^3.1.10",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.8.3"
+  }
+}

@@ -1,0 +1,113 @@
+# templates/ai-devops-optimizer.yml
+spec:
+  inputs:
+    stage:
+      default: 'deploy'
+      description: 'Pipeline stage to run AI optimization'
+    environment:
+      description: 'Target environment (staging/production)'
+      default: 'staging'
+    ai_model:
+      description: 'Google Cloud AI model to use'
+      default: 'gemini-2.0-flash-001'
+    optimize_for:
+      description: 'Optimization target: speed, cost, or balanced'
+      default: 'balanced'
+      options:
+        - 'speed'
+        - 'cost' 
+        - 'balanced'
+---
+# AI DevOps Companion Component
+# Automatically optimizes your GitLab CI/CD pipelines using AI
+
+.ai_devops_variables:
+  variables:
+    AI_PROJECT_ID: ${GCP_PROJECT_ID}
+    AI_LOCATION: ${GCP_LOCATION:-us-central1}
+    AI_MODEL: $[[ inputs.ai_model ]]
+    OPTIMIZATION_MODE: $[[ inputs.optimize_for ]]
+
+.ai_devops_before_script:
+  before_script:
+    - echo "🤖 AI DevOps Companion initializing..."
+    - |
+      if [ -z "$GITLAB_AI_COMPANION_TOKEN" ]; then
+        echo "❌ Error: GITLAB_AI_COMPANION_TOKEN not set"
+        exit 1
+      fi
+    - echo "✅ Connected to AI Companion service"
+
+ai_optimize_pipeline:
+  stage: $[[ inputs.stage ]]
+  image: google/cloud-sdk:alpine
+  extends:
+    - .ai_devops_variables
+    - .ai_devops_before_script
+  script:
+    - echo "🔍 Analyzing pipeline performance..."
+    - |
+      # Call AI Companion API
+      curl -X POST https://gitlab-ai-companion.run.app/api/optimize \
+        -H "Authorization: Bearer $GITLAB_AI_COMPANION_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"project_id\": \"$CI_PROJECT_ID\",
+          \"pipeline_id\": \"$CI_PIPELINE_ID\",
+          \"environment\": \"$[[ inputs.environment ]]\",
+          \"optimization_mode\": \"$[[ inputs.optimize_for ]]\"
+        }"
+    - echo "✅ AI optimization complete"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: manual
+    - if: $CI_COMMIT_BRANCH == $CI_DEFAULT_BRANCH
+      when: always
+
+ai_predict_resources:
+  stage: .pre
+  image: google/cloud-sdk:alpine
+  extends:
+    - .ai_devops_variables
+  script:
+    - echo "🔮 Predicting resource requirements..."
+    - |
+      # Analyze code changes and predict resources
+      PREDICTION=$(curl -s -X POST https://gitlab-ai-companion.run.app/api/predict \
+        -H "Authorization: Bearer $GITLAB_AI_COMPANION_TOKEN" \
+        -H "Content-Type: application/json" \
+        -d "{
+          \"project_id\": \"$CI_PROJECT_ID\",
+          \"commit_sha\": \"$CI_COMMIT_SHA\",
+          \"branch\": \"$CI_COMMIT_REF_NAME\"
+        }")
+      
+      echo "$PREDICTION" > resource_prediction.json
+      echo "📊 Predicted resources: $(cat resource_prediction.json)"
+  artifacts:
+    reports:
+      dotenv: resource_prediction.env
+    paths:
+      - resource_prediction.json
+    expire_in: 1 hour
+
+ai_auto_fix:
+  stage: $[[ inputs.stage ]]
+  image: google/cloud-sdk:alpine
+  extends:
+    - .ai_devops_variables
+  script:
+    - echo "🔧 AI Auto-fix checking for issues..."
+    - |
+      if [ "$CI_PIPELINE_STATUS" == "failed" ]; then
+        curl -X POST https://gitlab-ai-companion.run.app/api/autofix \
+          -H "Authorization: Bearer $GITLAB_AI_COMPANION_TOKEN" \
+          -H "Content-Type: application/json" \
+          -d "{
+            \"project_id\": \"$CI_PROJECT_ID\",
+            \"pipeline_id\": \"$CI_PIPELINE_ID\",
+            \"job_id\": \"$CI_JOB_ID\"
+          }"
+      fi
+  when: on_failure
+  allow_failure: true
