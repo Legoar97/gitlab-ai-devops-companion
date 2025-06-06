@@ -8,6 +8,10 @@ import { typeDefs } from './graphql/schema';
 import { resolvers } from './graphql/resolvers';
 import { GitLabService } from './services/gitlab.service';
 import { AIEngine } from './services/ai-engine.service';
+import { BigQueryAnalyticsService } from './services/bigquery-analytics.service';
+import { VertexAIPredictionService } from './services/vertex-ai-prediction.service';
+import { SlackNotificationService } from './services/slack-notification.service';
+import webhookRoutes from './routes/webhook.routes';
 
 // Cargar variables de entorno
 dotenv.config();
@@ -19,6 +23,9 @@ async function startServer() {
   // IMPORTANTE: Crear instancias de servicios AQUÍ, fuera del request handler
   const gitlabService = new GitLabService();
   const aiEngine = new AIEngine();
+  const analyticsService = new BigQueryAnalyticsService();
+  const predictionService = new VertexAIPredictionService();
+  const slackService = new SlackNotificationService();
   
   console.log('📦 Services initialized');
 
@@ -42,7 +49,7 @@ async function startServer() {
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0">
         <title>GitLab AI DevOps Companion API</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
         <style>
           * {
             margin: 0;
@@ -259,6 +266,17 @@ async function startServer() {
             flex-shrink: 0;
           }
 
+          .new-badge {
+            background: linear-gradient(135deg, #f59e0b 0%, #ef4444 100%);
+            color: white;
+            padding: 0.125rem 0.5rem;
+            border-radius: 9999px;
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            margin-left: 0.5rem;
+          }
+
           footer {
             text-align: center;
             margin-top: 6rem;
@@ -287,7 +305,7 @@ async function startServer() {
               </svg>
             </div>
             <h1>GitLab AI DevOps Companion</h1>
-            <p class="subtitle">Intelligent CI/CD Pipeline Management API</p>
+            <p class="subtitle">Intelligent CI/CD Pipeline Management API with ML Predictions</p>
             <div class="status-badge">
               <div class="status-indicator"></div>
               <span>Operational</span>
@@ -328,11 +346,11 @@ async function startServer() {
                 </li>
                 <li>
                   <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-                  Pipeline resource predictions
+                  ML-powered predictions <span class="new-badge">New</span>
                 </li>
                 <li>
                   <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
-                  Cost optimization analysis
+                  Real-time analytics <span class="new-badge">New</span>
                 </li>
                 <li>
                   <svg viewBox="0 0 24 24"><path d="M9 16.17L4.83 12l-1.42 1.41L9 19 21 7l-1.41-1.41z"/></svg>
@@ -345,28 +363,22 @@ async function startServer() {
               <div class="card-header">
                 <div class="card-icon">
                   <svg viewBox="0 0 24 24">
-                    <path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/>
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
                   </svg>
                 </div>
-                <h3>Example Request</h3>
+                <h3>Webhook Endpoints <span class="new-badge">New</span></h3>
               </div>
-              <p>Process a natural language command</p>
+              <p>Configure GitLab webhooks for real-time analytics</p>
               <div class="code-block">
-                <code>curl -X POST ${serviceUrl}/graphql \\
-  -H "Content-Type: application/json" \\
-  -d '{
-    "query": "mutation {
-      processCommand(
-        command: \\"deploy to production\\"
-        context: \\"my-project\\"
-      ) {
-        intent
-        action
-        message
-        executed
-      }
-    }"
-  }'</code>
+                <code>POST ${serviceUrl}/webhooks/pipeline
+POST ${serviceUrl}/webhooks/job
+POST ${serviceUrl}/webhooks/merge-request</code>
+              </div>
+              <div class="links">
+                <a href="https://docs.gitlab.com/ee/user/project/integrations/webhooks.html" class="link" target="_blank">
+                  <svg viewBox="0 0 24 24"><path d="M10 6H6a2 2 0 00-2 2v10a2 2 0 002 2h10a2 2 0 002-2v-4M14 4h6m0 0v6m0-6L10 14"/></svg>
+                  GitLab Webhook Docs
+                </a>
               </div>
             </div>
 
@@ -374,7 +386,32 @@ async function startServer() {
               <div class="card-header">
                 <div class="card-icon">
                   <svg viewBox="0 0 24 24">
-                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"/>
+                    <path d="M9.4 16.6L4.8 12l4.6-4.6L8 6l-6 6 6 6 1.4-1.4zm5.2 0l4.6-4.6-4.6-4.6L16 6l6 6-6 6-1.4-1.4z"/>
+                  </svg>
+                </div>
+                <h3>Example Commands</h3>
+              </div>
+              <p>Process natural language commands with AI</p>
+              <div class="code-block">
+                <code>// Deploy with optimal timing
+"schedule deployment for next maintenance window"
+
+// Cost analysis
+"analyze my pipeline costs"
+
+// Performance insights
+"show performance report for last week"
+
+// Auto-fix failures
+"fix the failed job"</code>
+              </div>
+            </div>
+
+            <div class="card">
+              <div class="card-header">
+                <div class="card-icon">
+                  <svg viewBox="0 0 24 24">
+                    <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
                   </svg>
                 </div>
                 <h3>Documentation</h3>
@@ -395,6 +432,7 @@ async function startServer() {
 
           <footer>
             <p>Built for Google Cloud + GitLab Hackathon 2025</p>
+            <p>Powered by Gemini 2.0 Flash & Vertex AI</p>
           </footer>
         </div>
       </body>
@@ -408,12 +446,23 @@ async function startServer() {
       status: 'healthy',
       timestamp: new Date().toISOString(),
       service: 'gitlab-ai-devops-companion',
-      version: '1.0.0'
+      version: '2.0.0',
+      features: {
+        graphql: true,
+        webhooks: true,
+        analytics: true,
+        predictions: true,
+        notifications: !!process.env.SLACK_WEBHOOK_URL
+      }
     });
   });
 
   // Aplicar middlewares DESPUÉS de las rutas GET
   app.use(cors());
+  app.use(bodyParser.json({ limit: '10mb' })); // Aumentar límite para webhooks grandes
+
+  // Webhook routes (antes de GraphQL para evitar conflictos)
+  app.use('/webhooks', webhookRoutes);
 
   // GraphQL endpoint con context correcto
   app.use(
@@ -422,32 +471,65 @@ async function startServer() {
     expressMiddleware(server, {
       context: async ({ req }) => {
         // Verificar que los servicios existen
-        console.log('📝 Creating context for request');
-        console.log('🔧 GitLab service methods:', Object.getOwnPropertyNames(Object.getPrototypeOf(gitlabService)));
+        console.log('Creating context for request');
         
         return {
-          gitlab: gitlabService,  // Usar la instancia creada arriba
-          ai: aiEngine,           // Usar la instancia creada arriba
+          gitlab: gitlabService,
+          ai: aiEngine,
+          analytics: analyticsService,
+          predictions: predictionService,
+          notifications: slackService,
           user: req.headers.authorization || null
         };
       }
     })
   );
 
+  // Error handling middleware
+  app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+    console.error('Error:', err);
+    res.status(500).json({
+      error: 'Internal server error',
+      message: process.env.NODE_ENV === 'development' ? err.message : undefined
+    });
+  });
+
   // Iniciar servidor
   app.listen(PORT, () => {
     console.log(`
-      🚀 GitLab AI DevOps Companion started successfully!
+      🚀 GitLab AI DevOps Companion v2.0 started successfully!
       📍 Server running at: http://localhost:${PORT}
       📊 GraphQL endpoint: http://localhost:${PORT}/graphql
+      🪝 Webhook endpoints: http://localhost:${PORT}/webhooks/*
+      🤖 ML Predictions: Enabled
+      📈 Analytics: BigQuery connected
+      🔔 Notifications: ${process.env.SLACK_WEBHOOK_URL ? 'Slack connected' : 'Disabled'}
       🖥️  Platform: ${process.platform}
       📅 Date: ${new Date().toLocaleDateString()}
     `);
+
+    // Programar tareas periódicas
+    if (process.env.ENABLE_SCHEDULED_TASKS === 'true') {
+      // Entrenar modelo cada domingo a las 2 AM
+      setInterval(async () => {
+        const now = new Date();
+        if (now.getDay() === 0 && now.getHours() === 2) {
+          console.log('Starting scheduled model training...');
+          await predictionService.trainPredictionModel();
+        }
+      }, 60 * 60 * 1000); // Verificar cada hora
+
+      // Verificar anomalías cada 30 minutos
+      setInterval(async () => {
+        console.log('Checking for anomalies...');
+        // Aquí podrías implementar la lógica para verificar todos los proyectos
+      }, 30 * 60 * 1000);
+    }
   });
 }
 
 // Iniciar
 startServer().catch(err => {
-  console.error('❌ Failed to start server:', err);
+  console.error('Failed to start server:', err);
   process.exit(1);
 });

@@ -1,6 +1,7 @@
 {
   "name": "gitlab-ai-companion-frontend",
-  "version": "1.0.0",
+  "version": "2.0.0",
+  "description": "Frontend for GitLab AI DevOps Companion with analytics dashboard",
   "private": true,
   "dependencies": {
     "@apollo/client": "^3.13.8",
@@ -19,8 +20,9 @@
     "graphql": "^16.8.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^7.6.2",
+    "react-router-dom": "^6.20.0",
     "react-scripts": "^5.0.1",
+    "recharts": "^2.15.3",
     "typescript": "^4.9.5",
     "uuid": "^9.0.1",
     "web-vitals": "^2.1.4"
@@ -29,7 +31,9 @@
     "start": "react-scripts start",
     "build": "react-scripts build",
     "test": "react-scripts test",
-    "eject": "react-scripts eject"
+    "eject": "react-scripts eject",
+    "lint": "eslint src --ext .ts,.tsx",
+    "format": "prettier --write \"src/**/*.{ts,tsx,json,css}\""
   },
   "eslintConfig": {
     "extends": [
@@ -50,9 +54,14 @@
     ]
   },
   "devDependencies": {
+    "@types/recharts": "^1.8.29",
     "@types/uuid": "^9.0.8",
     "autoprefixer": "^10.4.16",
+    "eslint": "^8.57.0",
+    "eslint-config-prettier": "^9.1.0",
+    "eslint-plugin-prettier": "^5.1.2",
     "postcss": "^8.4.32",
+    "prettier": "^3.1.1",
     "tailwindcss": "^3.3.6"
   },
   "proxy": "http://localhost:4000"

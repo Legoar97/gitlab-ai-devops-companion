@@ -192,7 +192,7 @@ export class GitLabService {
   // Verificar estado de CI/CD del proyecto
   async verifyProjectCICD(projectPath: string) {
     try {
-      console.log(`🔍 Verifying CI/CD for ${projectPath}...`);
+      console.log(`Verifying CI/CD for ${projectPath}...`);
       
       const project = await this.getProject(projectPath);
       
@@ -204,7 +204,7 @@ export class GitLabService {
           { params: { per_page: 1 } }
         );
         cicdEnabled = true; // Si no da error, CI/CD está habilitado
-        console.log(`📋 Existing pipelines: ${pipelines.data.length}`);
+        console.log(`Existing pipelines: ${pipelines.data.length}`);
         if (pipelines.data.length > 0) {
           console.log('Last pipeline:', {
             id: pipelines.data[0].id,
@@ -220,11 +220,11 @@ export class GitLabService {
       }
       
       console.log(`
-📊 Project CI/CD Status:
+Project CI/CD Status:
 - Project ID: ${project.id}
 - Name: ${project.name}
 - Default Branch: ${project.default_branch}
-- CI/CD Enabled: ${cicdEnabled ? '✅ YES' : '❌ NO'}
+- CI/CD Enabled: ${cicdEnabled ? 'YES' : 'NO'}
 - Visibility: ${project.visibility}
       `);
       
@@ -234,9 +234,9 @@ export class GitLabService {
           `/projects/${project.id}/repository/files/${encodeURIComponent('.gitlab-ci.yml')}`,
           { params: { ref: project.default_branch } }
         );
-        console.log('✅ .gitlab-ci.yml exists');
+        console.log('.gitlab-ci.yml exists');
       } catch (e: any) {
-        console.error('❌ .gitlab-ci.yml NOT FOUND');
+        console.error('.gitlab-ci.yml NOT FOUND');
       }
       
       return { ...project, ci_enabled: cicdEnabled };
@@ -251,7 +251,7 @@ export class GitLabService {
     try {
       const project = await this.getProject(projectPath);
       
-      console.log('⚡ Attempting to enable CI/CD for the project...');
+      console.log('Attempting to enable CI/CD for the project...');
       
       // Intentar actualizar el proyecto con CI/CD habilitado
       const response = await this.apiClient.put(
@@ -263,7 +263,7 @@ export class GitLabService {
         }
       );
       
-      console.log('✅ CI/CD enable request sent');
+      console.log('CI/CD enable request sent');
       return response.data;
     } catch (error: any) {
       console.error('Error enabling CI/CD:', error.response?.data || error.message);
@@ -275,25 +275,25 @@ export class GitLabService {
   // IMPORTANTE: Trigger pipeline REAL - VERSIÓN FUNCIONANDO
   async triggerPipeline(projectPath: string, ref: string = 'main', variables?: any) {
     try {
-      console.log(`🚀 Triggering REAL pipeline for ${projectPath} on ${ref}`);
+      console.log(`Triggering REAL pipeline for ${projectPath} on ${ref}`);
       
       const project = await this.getProject(projectPath);
-      console.log(`📁 Project ID: ${project.id}`);
-      console.log(`🔗 Project URL: ${project.web_url}`);
-      console.log(`🌿 Default branch: ${project.default_branch}`);
+      console.log(`Project ID: ${project.id}`);
+      console.log(`Project URL: ${project.web_url}`);
+      console.log(`Default branch: ${project.default_branch}`);
       
       // Verificar si el branch existe
       try {
         await this.apiClient.get(
           `/projects/${project.id}/repository/branches/${ref}`
         );
-        console.log(`✅ Branch '${ref}' exists`);
+        console.log(`Branch '${ref}' exists`);
       } catch (e: any) {
         if (e.response?.status === 404) {
-          console.error(`❌ Branch '${ref}' NOT FOUND!`);
+          console.error(`Branch '${ref}' NOT FOUND!`);
           // Si el branch no existe, usar el default
           ref = project.default_branch;
-          console.log(`🔄 Switching to default branch: ${ref}`);
+          console.log(`Switching to default branch: ${ref}`);
         }
       }
       
@@ -312,10 +312,10 @@ export class GitLabService {
           });
         }
         requestBody.variables = pipelineVariables;
-        console.log(`📋 Variables:`, pipelineVariables);
+        console.log(`Variables:`, pipelineVariables);
       }
       
-      console.log(`📤 Request body:`, JSON.stringify(requestBody, null, 2));
+      console.log(`Request body:`, JSON.stringify(requestBody, null, 2));
       
       // USAR EL ENDPOINT CORRECTO: /pipeline (singular) no /pipelines (plural)
       const response = await this.apiClient.post(
@@ -324,7 +324,7 @@ export class GitLabService {
       );
 
       const pipeline = response.data;
-      console.log(`✅ Pipeline triggered successfully: ${pipeline.web_url}`);
+      console.log(`Pipeline triggered successfully: ${pipeline.web_url}`);
 
       return {
         pipeline: {
@@ -338,7 +338,7 @@ export class GitLabService {
         errors: []
       };
     } catch (error: any) {
-      console.error('❌ Pipeline trigger error:', {
+      console.error('Pipeline trigger error:', {
         status: error.response?.status,
         statusText: error.response?.statusText,
         data: error.response?.data,
@@ -390,7 +390,7 @@ export class GitLabService {
         }
       }
       
-      console.log('🔧 Using trigger token method');
+      console.log('Using trigger token method');
       
       const response = await axios.post(
         `${this.gitlabUrl}/api/v4/projects/${project.id}/trigger/pipeline`,
@@ -490,6 +490,118 @@ export class GitLabService {
       return response.data;
     } catch (error: any) {
       console.error('Error canceling pipeline:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  // Obtener métricas de pipelines
+  async getPipelineMetrics(projectPath: string, timeRange: string = 'last_7_days') {
+    try {
+      const project = await this.getProject(projectPath);
+      
+      // Calcular fechas según el rango
+      const endDate = new Date();
+      let startDate = new Date();
+      
+      switch (timeRange) {
+        case 'today':
+          startDate.setHours(0, 0, 0, 0);
+          break;
+        case 'last_7_days':
+          startDate.setDate(startDate.getDate() - 7);
+          break;
+        case 'last_30_days':
+          startDate.setDate(startDate.getDate() - 30);
+          break;
+        default:
+          startDate.setDate(startDate.getDate() - 7);
+      }
+      
+      // Obtener pipelines en el rango
+      const response = await this.apiClient.get(
+        `/projects/${project.id}/pipelines`,
+        {
+          params: {
+            per_page: 100,
+            updated_after: startDate.toISOString(),
+            updated_before: endDate.toISOString()
+          }
+        }
+      );
+      
+      const pipelines = response.data;
+      
+      // Calcular métricas
+      const totalRuns = pipelines.length;
+      const successfulRuns = pipelines.filter((p: any) => p.status === 'success').length;
+      const failedRuns = pipelines.filter((p: any) => p.status === 'failed').length;
+      const durations = pipelines
+        .filter((p: any) => p.duration)
+        .map((p: any) => p.duration);
+      
+      const avgDuration = durations.length > 0
+        ? Math.round(durations.reduce((a: number, b: number) => a + b, 0) / durations.length / 60)
+        : 0;
+      
+      return {
+        totalRuns,
+        successfulRuns,
+        failedRuns,
+        successRate: totalRuns > 0 ? Math.round((successfulRuns / totalRuns) * 100) : 0,
+        avgDuration,
+        pipelines
+      };
+    } catch (error: any) {
+      console.error('Error getting pipeline metrics:', error.response?.data || error.message);
+      throw error;
+    }
+  }
+
+  // Obtener el último job fallido
+  async getLastFailedJob(projectPath: string) {
+    try {
+      const project = await this.getProject(projectPath);
+      
+      // Obtener pipelines recientes
+      const pipelinesResponse = await this.apiClient.get(
+        `/projects/${project.id}/pipelines`,
+        { params: { per_page: 10 } }
+      );
+      
+      // Buscar jobs fallidos
+      for (const pipeline of pipelinesResponse.data) {
+        const jobsResponse = await this.apiClient.get(
+          `/projects/${project.id}/pipelines/${pipeline.id}/jobs`,
+          { params: { scope: ['failed'] } }
+        );
+        
+        if (jobsResponse.data.length > 0) {
+          const failedJob = jobsResponse.data[0];
+          
+          // Obtener el log del job
+          const logResponse = await this.apiClient.get(
+            `/projects/${project.id}/jobs/${failedJob.id}/trace`
+          );
+          
+          return {
+            id: failedJob.id,
+            name: failedJob.name,
+            stage: failedJob.stage,
+            status: failedJob.status,
+            failureReason: failedJob.failure_reason,
+            log: logResponse.data,
+            config: {
+              script: failedJob.script,
+              image: failedJob.image,
+              tags: failedJob.tags
+            }
+          };
+        }
+      }
+      
+      return null;
+    } catch (error: any) {
+      console.error('Error getting last failed job:', error.response?.data || error.message);
       throw error;
     }
   }

@@ -1,4 +1,8 @@
-export const resolvers = {
+// backend/src/graphql/resolvers.ts
+import { analyticsResolvers } from './analytics.resolvers';
+
+// Resolvers existentes
+const baseResolvers = {
   Query: {
     hello: () => 'Hello from GitLab AI DevOps Companion!',
     
@@ -43,7 +47,7 @@ export const resolvers = {
     processCommand: async (_: any, args: any, context: any) => {
       const { command, context: userContext } = args;
       
-      console.log(`🎤 Processing command: "${command}"`);
+      console.log(`Processing command: "${command}"`);
       
       // Procesar con AI
       const aiResult = await context.ai.processNaturalLanguage(command, userContext);
@@ -65,7 +69,7 @@ export const resolvers = {
             const branch = aiResult.entities.branch || 'main';
             const environment = aiResult.entities.environment || 'staging';
             
-            console.log(`📦 Deploying ${branch} to ${environment} in project ${projectPath}`);
+            console.log(`Deploying ${branch} to ${environment} in project ${projectPath}`);
             
             // Verificar que tenemos un proyecto válido
             if (!projectPath || projectPath === 'default-project') {
@@ -101,7 +105,7 @@ export const resolvers = {
             response = {
               ...response,
               action: 'pipeline_triggered',
-              message: `🚀 Deployment initiated! Pipeline ${deployResult.pipeline.iid} started for ${branch} → ${environment}`,
+              message: `Deployment initiated! Pipeline ${deployResult.pipeline.iid} started for ${branch} → ${environment}`,
               data: JSON.stringify({
                 pipeline: {
                   id: deployResult.pipeline.id,
@@ -168,6 +172,165 @@ export const resolvers = {
           }
           break;
 
+        case 'COST_ANALYSIS':
+          try {
+            const projectPath = aiResult.entities.project || userContext;
+            
+            // Análisis de costos con IA
+            const costAnalysis = await context.ai.analyzePipelineCosts(projectPath);
+            
+            response = {
+              ...response,
+              action: 'cost_analysis',
+              message: `Cost Analysis for ${projectPath}:
+              
+Current monthly cost: $${costAnalysis.currentCost}
+Projected savings: $${costAnalysis.potentialSavings} (${costAnalysis.savingsPercentage}%)
+
+Top recommendations:
+${costAnalysis.recommendations.map((r: string, i: number) => `${i + 1}. ${r}`).join('\n')}
+
+Estimated ROI: ${costAnalysis.roi} in 3 months`,
+              data: JSON.stringify(costAnalysis),
+              executed: true
+            };
+          } catch (error: any) {
+            response = {
+              ...response,
+              action: 'error',
+              message: `Cost analysis failed: ${error.message}`,
+              executed: false
+            };
+          }
+          break;
+
+        case 'PERFORMANCE_REPORT':
+          try {
+            const projectPath = aiResult.entities.project || userContext;
+            const timeRange = aiResult.entities.timeRange || 'last_7_days';
+            
+            // Generar reporte de performance con IA
+            const report = await context.gitlab.getPipelineMetrics(projectPath, timeRange);
+            const aiInsights = await context.ai.analyzePerformanceTrends(report);
+            
+            response = {
+              ...response,
+              action: 'performance_report',
+              message: `Performance Report (${timeRange}):
+
+Pipeline Success Rate: ${report.successRate}%
+Average Duration: ${report.avgDuration} minutes
+Total Runs: ${report.totalRuns}
+
+AI Insights:
+${aiInsights.insights.join('\n')}
+
+Anomalies Detected:
+${aiInsights.anomalies.length > 0 ? aiInsights.anomalies.join('\n') : 'None'}`,
+              data: JSON.stringify({ report, aiInsights }),
+              executed: true
+            };
+          } catch (error: any) {
+            response = {
+              ...response,
+              action: 'error',
+              message: `Performance report failed: ${error.message}`,
+              executed: false
+            };
+          }
+          break;
+
+        case 'AUTO_FIX':
+          try {
+            const projectPath = aiResult.entities.project || userContext;
+            const jobId = aiResult.entities.jobId;
+            
+            if (!jobId) {
+              // Obtener el último job fallido
+              const failedJob = await context.gitlab.getLastFailedJob(projectPath);
+              if (!failedJob) {
+                return {
+                  ...response,
+                  action: 'no_failures',
+                  message: 'No failed jobs found. Everything is running smoothly!',
+                  executed: true
+                };
+              }
+              
+              // Analizar el log y sugerir fix
+              const fix = await context.ai.analyzeFailure(failedJob.log, failedJob.config);
+              
+              response = {
+                ...response,
+                action: 'fix_suggested',
+                message: `AI Fix Suggestion for job "${failedJob.name}":
+
+Root Cause: ${fix.rootCause}
+
+Suggested Fix:
+${fix.recommendation}
+
+Code Changes:
+\`\`\`${fix.language || 'yaml'}
+${fix.code}
+\`\`\`
+
+Confidence: ${fix.confidence}%`,
+                data: JSON.stringify(fix),
+                executed: true
+              };
+            }
+          } catch (error: any) {
+            response = {
+              ...response,
+              action: 'error',
+              message: `Auto-fix analysis failed: ${error.message}`,
+              executed: false
+            };
+          }
+          break;
+
+        case 'SCHEDULE_DEPLOYMENT':
+          try {
+            const projectPath = aiResult.entities.project || userContext;
+            const environment = aiResult.entities.environment || 'staging';
+            const scheduleTime = aiResult.entities.time || 'next_maintenance_window';
+            
+            // Calcular el mejor momento con IA
+            const schedule = await context.ai.calculateOptimalDeploymentTime(
+              projectPath,
+              environment,
+              scheduleTime
+            );
+            
+            response = {
+              ...response,
+              action: 'deployment_scheduled',
+              message: `Deployment Scheduled:
+
+Environment: ${environment}
+Optimal Time: ${schedule.suggestedTime}
+Reason: ${schedule.reason}
+
+Risk Assessment:
+- Traffic Impact: ${schedule.trafficImpact}
+- Success Probability: ${schedule.successProbability}%
+- Rollback Time: ${schedule.estimatedRollbackTime} minutes
+
+The deployment will be triggered automatically at the scheduled time.`,
+              data: JSON.stringify(schedule),
+              executed: true
+            };
+          } catch (error: any) {
+            response = {
+              ...response,
+              action: 'error',
+              message: `Scheduling failed: ${error.message}`,
+              executed: false
+            };
+          }
+          break;
+
         case 'PIPELINE_CREATE':
           response = {
             ...response,
@@ -195,7 +358,11 @@ export const resolvers = {
 • deploy feature-xyz to production - Deploy a specific branch
 • check pipeline status - Get the status of the latest pipeline
 • show recent pipelines - List recent pipeline runs
-• optimize my pipeline - Get optimization suggestions`,
+• optimize my pipeline - Get optimization suggestions
+• analyze my pipeline costs - Get cost breakdown and savings
+• show performance report - Get performance metrics and AI insights
+• fix failed job - Get AI suggestions to fix failures
+• schedule deployment for tomorrow - Schedule optimal deployment time`,
             executed: true
           };
           break;
@@ -244,4 +411,16 @@ export const resolvers = {
       }
     }
   }
+};
+
+// Combinar todos los resolvers
+export const resolvers = {
+  Query: {
+    ...baseResolvers.Query,
+    ...analyticsResolvers.Query,
+  },
+  Mutation: {
+    ...baseResolvers.Mutation,
+    ...analyticsResolvers.Mutation,
+  },
 };
